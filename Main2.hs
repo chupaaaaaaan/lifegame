@@ -1,8 +1,6 @@
 module Main where
 
-import Data.List
-import Control.Monad
-import Control.Concurrent
+import Graphics.Gloss
 
 
 ------------------------------
@@ -69,6 +67,13 @@ toZ2 w h a xss = Z2 $ toZ h (toZ w a []) (map (toZ w a) xss)
 ------------------------------
 -- Life Game on Torus
 ------------------------------
+nWidth, nHeight, cSize,  wWidth, wHeight :: Num a => a
+nWidth  = 50
+nHeight = 50
+cSize   = 10
+wWidth  = nWidth * cSize
+wHeight = nHeight * cSize
+
 -- n0 n1 n2
 -- n3 _  n4
 -- n5 n6 n7
@@ -84,30 +89,29 @@ life z = let a = extract z
              n = countNeighbours z
          in (a && (n == 2 || n == 3)) || (not a && n == 3)
 
-showZ2 :: Z2 Char -> IO ()
-showZ2 (Z2 (Z rs xs rows)) = do
-  forM_ ([xs] ++ rows ++ [rs]) $ \(Z r x row) -> do
-    putStrLn . intercalate " " . map pure $ [x] ++ row ++ [r]
+
+type Model = Z2 Bool
+
+draw :: Model -> Picture
+draw (Z2 (Z rs xs rows)) =
+  let cell = translate (-cSize / 2) (cSize / 2) $ rectangleSolid cSize cSize
+      b2c b = if b then black else white
+      cells = do
+        ((Z r z row),h) <- zip ([xs] ++ rows ++ [rs]) [1..nHeight]
+        (b          ,w) <- zip ([z] ++ row ++ [r])    [1..nWidth]
+        let x = fromIntegral w * cSize - wWidth / 2
+            y = wHeight / 2 - fromIntegral h * cSize
+            transform = color (b2c b) . translate x y
+        pure $ transform cell
+  in mconcat cells
 
 main :: IO ()
-main = do
-  let c2b c = if c == '.' then False else True
-      b2c b = if b then '#' else '.'
-      (w, h) = (50, 50)
-      field = [ "........."
-              , "..#......"
-              , "....#...."
-              , ".##..###."
-              , "........."
-              ]
-      initState = fmap c2b $ toZ2 w h '.' field
-      loop state = do
-        let state' = extend life state
-        replicateM_ h $ putStr "\ESC[A\ESC[2K"
-        showZ2 (fmap b2c state)
-        threadDelay 300000
-        loop state'
-
-  replicateM_ h $ putStr ""
-
-  loop initState
+main = simulate inWindow white 20 initModel draw (\_ _ -> extend life)
+  where inWindow = InWindow "No Title" (wWidth, wHeight) (100,100)
+        field = [ "........."
+                , "..#......"
+                , "....#...."
+                , ".##..###."
+                , "........."
+                ]
+        initModel = toZ2 nWidth nHeight False $ map (map (=='#')) field
